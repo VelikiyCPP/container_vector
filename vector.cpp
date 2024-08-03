@@ -491,13 +491,20 @@ int main() {
     std::cout << std::endl;
 
     std::cout << "Vector elements in reverse order: ";
-    for (auto it = vec_init.rbegin(); it != vec_init.rend() + 1; ++it) {
+    for (auto it = vec_init.rbegin(); it != vec_init.rend(); ++it) {
         std::cout << *it << " ";
     }
     std::cout << std::endl;
 
     vec_init.shrink_to_fit();
     std::cout << "Vector capacity after shrink_to_fit: " << vec_init.capacity() << std::endl;
+
+    try {
+        auto it = vec.rbegin() + 1;
+    }
+    catch (const std::out_of_range& err) {
+        std::cout << err.what() << std::endl;
+    }
 
     return 0;
 }
