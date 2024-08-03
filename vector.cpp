@@ -177,7 +177,7 @@ public:
 
         value_type* new_arr;
         try {
-            new_arr = static_cast<T*>(operator new[](new_capacity * sizeof(T)));
+            new_arr = static_cast<T*>(operator ::new[](new_capacity * sizeof(T)));
         }
         catch (const std::bad_alloc& bad) {
             std::cout << bad.what();
@@ -439,77 +439,63 @@ public:
 #include <vector>
 
 int main() {
-    // Test default constructor and size
     Vector<int> vec;
-    std::cout << "Initial vector size: " << vec.size() << std::endl; // Expected output: 0
+    std::cout << "Initial vector size: " << vec.size() << std::endl;
 
-    // Test resizing and filling with a value
     vec.resize(5, 10);
-    std::cout << "Vector size after resize(5, 10): " << vec.size() << std::endl; // Expected output: 5
-    std::cout << "Vector capacity after resize(5, 10): " << vec.capacity() << std::endl; // Expected output: >= 5
+    std::cout << "Vector size after resize(5, 10): " << vec.size() << std::endl;
+    std::cout << "Vector capacity after resize(5, 10): " << vec.capacity() << std::endl;
 
-    // Test accessing elements
     for (size_t i = 0; i < vec.size(); ++i) {
-        std::cout << "Element at index " << i << ": " << vec[i] << std::endl; // Expected output: 10
+        std::cout << "Element at index " << i << ": " << vec[i] << std::endl;
     }
 
-    // Test push_back
     vec.push_back(20);
-    std::cout << "Vector size after push_back(20): " << vec.size() << std::endl; // Expected output: 6
-    std::cout << "Element at index 5 (last element): " << vec[5] << std::endl; // Expected output: 20
+    std::cout << "Vector size after push_back(20): " << vec.size() << std::endl;
+    std::cout << "Element at index 5 (last element): " << vec[5] << std::endl;
 
-    // Test pop_back
     vec.pop_back();
-    std::cout << "Vector size after pop_back(): " << vec.size() << std::endl; // Expected output: 5
+    std::cout << "Vector size after pop_back(): " << vec.size() << std::endl;
 
-    // Test insert
     auto it = vec.begin() + 2;
     vec.insert(it, 30);
-    std::cout << "Vector size after insert(30): " << vec.size() << std::endl; // Expected output: 6
-    std::cout << "Element at index 2 (after insert): " << vec[2] << std::endl; // Expected output: 30
+    std::cout << "Vector size after insert(30): " << vec.size() << std::endl;
+    std::cout << "Element at index 2 (after insert): " << vec[2] << std::endl;
 
-    // Test erase
     vec.erase(it);
-    std::cout << "Vector size after erase(): " << vec.size() << std::endl; // Expected output: 5
-    std::cout << "Element at index 2 (after erase): " << vec[2] << std::endl; // Expected output: 10
+    std::cout << "Vector size after erase(): " << vec.size() << std::endl;
+    std::cout << "Element at index 2 (after erase): " << vec[2] << std::endl;
 
-    // Test resize with a larger size
     vec.resize(7, 40);
-    std::cout << "Vector size after resize(7, 40): " << vec.size() << std::endl; // Expected output: 7
-    std::cout << "Element at index 5 (after resize): " << vec[5] << std::endl; // Expected output: 40
+    std::cout << "Vector size after resize(7, 40): " << vec.size() << std::endl;
+    std::cout << "Element at index 5 (after resize): " << vec[5] << std::endl;
 
-    // Test resize with a smaller size
     vec.resize(3);
-    std::cout << "Vector size after resize(3): " << vec.size() << std::endl; // Expected output: 3
+    std::cout << "Vector size after resize(3): " << vec.size() << std::endl;
 
-    // Test clear
     vec.clear();
-    std::cout << "Vector size after clear(): " << vec.size() << std::endl; // Expected output: 0
+    std::cout << "Vector size after clear(): " << vec.size() << std::endl;
 
-    // Test exception handling
     try {
-        vec.at(0); // Should throw std::out_of_range exception
+        vec.at(100);
     }
     catch (const std::out_of_range& e) {
         std::cout << "Caught expected exception: " << e.what() << std::endl;
     }
 
-    // Test Vector with initializer_list
     Vector<int> vec_init = { 1, 2, 3, 4, 5 };
-    std::cout << "Vector size with initializer_list: " << vec_init.size() << std::endl; // Expected output: 5
+    std::cout << "Vector size with initializer_list: " << vec_init.size() << std::endl;
     for (const auto& i : vec_init) {
-        std::cout << i << " "; // Expected output: 1 2 3 4 5
+        std::cout << i << " ";
     }
     std::cout << std::endl;
 
-    // Test reverse iterators
     std::cout << "Vector elements in reverse order: ";
     for (auto it = vec_init.rbegin(); it != vec_init.rend() + 1; ++it) {
-        std::cout << *it << " "; // Expected output: 5 4 3 2 1
+        std::cout << *it << " ";
     }
     std::cout << std::endl;
 
-    // Test shrink_to_fit
     vec_init.shrink_to_fit();
     std::cout << "Vector capacity after shrink_to_fit: " << vec_init.capacity() << std::endl;
 
