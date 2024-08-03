@@ -177,7 +177,7 @@ public:
 
         value_type* new_arr;
         try {
-            new_arr = static_cast<T*>(operator ::new[](new_capacity * sizeof(T)));
+            new_arr = static_cast<T*>(operator new[](new_capacity * sizeof(T)));
         }
         catch (const std::bad_alloc& bad) {
             std::cout << bad.what();
