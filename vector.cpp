@@ -164,17 +164,17 @@ public:
 
     Vector() : capacity_(0), size_(0), data_(nullptr) {}
 
-    Vector(size_type n) : capacity_(n), size_(n), data_(reinterpret_cast<T*>(::new char[n * sizeof(T)])) {
+    Vector(size_type n) : capacity_(n), size_(n), data_(reinterpret_cast<pointer>(::new char[n * sizeof(value_type)])) {
         std::uninitialized_default_construct_n(data_, n);
     }
 
     Vector(size_type n, const_reference value)
-        : capacity_(n), size_(n), data_(reinterpret_cast<T*>(::new char[n * sizeof(T)])) {
+        : capacity_(n), size_(n), data_(reinterpret_cast<pointer>(::new char[n * sizeof(value_type)])) {
         std::uninitialized_fill_n(data_, n, value);
     }
 
     Vector(const std::initializer_list<T>& list)
-        : capacity_(list.size()), size_(list.size()), data_(reinterpret_cast<T*>(::new char[capacity_ * sizeof(T)])) {
+        : capacity_(list.size()), size_(list.size()), data_(reinterpret_cast<pointer>(::new char[capacity_ * sizeof(value_type)])) {
         std::uninitialized_copy(list.begin(), list.end(), data_);
     }
 
