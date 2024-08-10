@@ -184,7 +184,7 @@ public:
             return;
         }
 
-        size_t distance = std::distance(first, last);
+        size_type distance = std::distance(first, last);
         reserve(distance);
 
         for (; first != last; ++first) {
