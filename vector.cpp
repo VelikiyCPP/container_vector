@@ -178,6 +178,20 @@ public:
         std::uninitialized_copy(list.begin(), list.end(), data_);
     }
 
+    template <class InputIt>
+    Vector(InputIt first, InputIt last) {
+        if (first == last) {
+            return;
+        }
+
+        size_t distance = std::distance(first, last);
+        reserve(distance);
+
+        for (; first != last; ++first) {
+            push_back(*first);
+        }
+    }
+
     void reserve(const size_type new_capacity) {
         if (new_capacity <= capacity_) {
             return;
