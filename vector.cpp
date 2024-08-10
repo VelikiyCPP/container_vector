@@ -3,9 +3,9 @@
 #include <initializer_list>
 #include <iostream>
 #include <memory>
-#include <new>
 #include <stdexcept>
 #include <type_traits>
+#include <cassert>
 
 template <typename T> class Vector {
     using value_type = T;
@@ -26,19 +26,24 @@ template <typename T> class Vector {
     template <bool is_const>
     class base_iterator {
     public:
-        using pointer_type = typename std::conditional_t<is_const, const T*, T*>;
-        using reference_type = typename std::conditional_t<is_const, const T&, T&>;
-        using value_type = T;
-        using difference_type = std::ptrdiff_t;
+        using pointer_type = typename std::conditional_t<is_const, const_pointer, pointer>;
+        using reference_type = typename std::conditional_t<is_const, const_reference, reference>;
 
-        pointer_type ptr_;
-        pointer_type begin_;
-        pointer_type end_;
+        pointer_type ptr_ = nullptr;
+        pointer_type begin_ = nullptr;
+        pointer_type end_ = nullptr;
+
+        base_iterator() : ptr_(nullptr), begin_(nullptr), end_(nullptr) {}
 
         base_iterator(pointer_type ptr, pointer_type begin, pointer_type end)
             : ptr_(ptr), begin_(begin), end_(end) {}
-        base_iterator(const base_iterator& other) = default;
-        base_iterator& operator=(const base_iterator& other) = default;
+        base_iterator(const base_iterator& other): begin_(other.begin_), ptr_(other.begin_), end_(other.end_) {}
+
+        base_iterator& operator=(const base_iterator& other)const {
+            begin_ = other.begin_;
+            ptr_   = other.ptr_;
+            end_   = other.end_;
+        }
 
         reference_type operator*() const {
             check_range();
@@ -55,35 +60,35 @@ template <typename T> class Vector {
             return *this;
         }
 
-        base_iterator operator++(int) {
-            base_iterator copy = *this;
-            ++ptr_;
-            check_range();
-            return copy;
-        }
-
         base_iterator& operator--() {
             --ptr_;
             check_range();
             return *this;
         }
 
+        base_iterator operator++(int) {
+            base_iterator copy<false> = *this;
+            ++ptr_;
+            check_range();
+            return copy;
+        }
+
         base_iterator operator--(int) {
-            base_iterator copy = *this;
+            base_iterator<false> copy = *this;
             --ptr_;
             check_range();
             return copy;
         }
 
         base_iterator operator+(const difference_type value) const {
-            base_iterator temp = *this;
+            base_iterator<false> temp = *this;
             temp.ptr_ += value;
             temp.check_range();
             return temp;
         }
 
         base_iterator operator-(const difference_type value) const {
-            base_iterator temp = *this;
+            base_iterator<false> temp = *this;
             temp.ptr_ -= value;
             temp.check_range();
             return temp;
@@ -133,7 +138,10 @@ template <typename T> class Vector {
             return { ptr_, begin_, end_ };
         }
 
-    private:
+        operator base_iterator<false>() const {
+            return { ptr_, begin_, end_ };
+        }
+
         void check_range() const {
             if (ptr_ < begin_ || ptr_ > end_) {
                 throw std::out_of_range("Iterator out of range");
@@ -176,19 +184,18 @@ public:
         }
 
         value_type* new_arr;
+
         try {
-            new_arr = static_cast<T*>(operator new[](new_capacity * sizeof(T)));
-        }
-        catch (const std::bad_alloc& bad) {
+            //new_arr = static_cast<T*>(operator new[](new_capacity * sizeof(T)));
+            new_arr = reinterpret_cast<value_type*>(::new char[new_capacity * sizeof(T)]);
+        } catch (const std::bad_alloc& bad) {
             std::cout << bad.what();
             throw;
         }
 
-
         try {
             std::uninitialized_copy(data_, data_ + size_, new_arr);
-        }
-        catch (...) {
+        } catch (...) {
             delete[] reinterpret_cast<char*>(new_arr);
             throw;
         }
@@ -199,6 +206,29 @@ public:
         data_ = new_arr;
         capacity_ = new_capacity;
     }
+
+    /*void reserve(const size_type new_capacity) {
+        if (new_capacity <= capacity_) {
+            return;
+        }
+
+        std::allocator<value_type> alloc;
+        value_type* new_arr = alloc.allocate(new_capacity);
+
+        try {
+            std::uninitialized_move_n(data_, size_, new_arr);
+        }
+        catch (...) {
+            alloc.deallocate(new_arr, new_capacity);
+            throw;
+        }
+
+        std::destroy(data_, data_ + size_);
+        alloc.deallocate(data_, capacity_);
+
+        data_ = new_arr;
+        capacity_ = new_capacity;
+    }*/
 
     void push_back(const_reference element) {
         if (size_ == capacity_) {
@@ -229,7 +259,7 @@ public:
         }
         else {
             if (count > size_) {
-                std::uninitialized_default_construct_n(data_ + size_, count - size_);
+                std::uninitialized_fill_n(data_ + size_, count - size_, 0);
             }
             else {
                 std::destroy(data_ + count, data_ + size_);
@@ -286,10 +316,10 @@ public:
     }
 
     iterator begin() noexcept { return iterator(data_, data_, data_ + size_); }
-    const_iterator cbegin() const noexcept { iterator(data_, data_, data_ + size_); }
+    const_iterator cbegin() const noexcept { return const_iterator(data_, data_, data_ + size_); }
 
     iterator end() noexcept { return iterator(data_ + size_, data_, data_ + size_); }
-    const_iterator cend() const noexcept { return iterator(data_ + size_, data_, data_ + size_); }
+    const_iterator cend() const noexcept { return const_iterator(data_ + size_, data_, data_ + size_); }
 
     const_reverse_iterator rbegin() const {
         return const_reverse_iterator(end());
@@ -349,14 +379,11 @@ public:
 
         pointer ptr = pos.ptr_;
 
-        if (ptr + 1 < data_ + size_) {
-            std::uninitialized_copy(ptr + 1, data_ + size_, ptr);
-            std::destroy_at(data_ + size_ - 1);
+        for (pointer it = ptr; it + 1 < data_ + size_; ++it) {
+            *it = *(it + 1);
         }
 
-        --size_;
-
-        return iterator(ptr, data_, data_ + size_);
+        return iterator(ptr, data_, data_ + size_--);
     }
 
     iterator erase(iterator first, iterator last) {
@@ -367,12 +394,21 @@ public:
         pointer ptr_first = first.ptr_;
         pointer ptr_last = last.ptr_;
 
-        std::uninitialized_copy(ptr_last, data_ + size_, ptr_first);
-        std::destroy(ptr_first + (data_ + size_ - ptr_last), data_ + size_);
+        for (pointer it = ptr_first; it + (ptr_last - ptr_first) < data_ + size_; ++it) {
+            *it = *(it + (ptr_last - ptr_first));
+        }
 
         size_ -= (ptr_last - ptr_first);
 
         return iterator(ptr_first, data_, data_ + size_);
+    }
+
+    iterator erase(const_iterator pos) {
+        return erase(static_cast<iterator>(pos));
+    }
+
+    iterator erase(const_iterator first, const_iterator last) {
+        return erase(static_cast<iterator>(first), static_cast<iterator>(last));
     }
 
     void clear() {
@@ -426,7 +462,8 @@ class Vector<bool> {
     };
 
     uint8_t* arr;
-
+    std::size_t size_;
+    std::size_t capacity_;
 public:
     Bit_reference operator[](std::size_t index) {
         std::uint8_t pos = index % 8;
@@ -434,77 +471,274 @@ public:
 
         return Bit_reference(ptr, pos);
     }
+
+    Vector(const std::initializer_list<bool>& list) {
+        size_ = list.size();
+        capacity_ = (size_ + 7) / 8;
+        arr = new uint8_t[capacity_]();
+
+        std::size_t i = 0;
+        for (bool value : list) {
+            if (value) {
+                arr[i / 8] |= (static_cast<uint8_t>(1) << (i % 8));
+            }
+            ++i;
+        }
+    }
+
+    Vector& operator=(const Vector& other) {
+        if (this != &other) {
+            delete[] arr;
+            size_ = other.size_;
+            capacity_ = other.capacity_;
+            arr = new uint8_t[capacity_];
+            std::copy(other.arr, other.arr + capacity_, arr);
+        }
+        return *this;
+    }
+
+    std::size_t size() const {
+        return size_;
+    }
+
+    std::size_t capacity() const {
+        return capacity_;
+    }
+
+    void pop_back() {
+        if (size_ == 0) {
+            throw std::out_of_range("Cannot pop from an empty vector");
+        }
+        --size_;
+        if (arr != nullptr) {
+            std::size_t pos = size_ % 8;
+            arr[size_ / 8] &= ~(static_cast<uint8_t>(1) << (7 - pos));
+        }
+    }
+
+    void push_back(bool value) {
+        if (size_ == capacity_ * 8) {
+            reserve(capacity_ == 0 ? 1 : capacity_ * 2);
+        }
+        if (value) {
+            arr[size_ / 8] |= (static_cast<uint8_t>(1) << (size_ % 8));
+        }
+        ++size_;
+    }
+
+    void reserve(std::size_t new_capacity) {
+        if (new_capacity == capacity_) {
+            return;
+        }
+        else if (new_capacity < capacity_) {
+            std::size_t new_size = std::min(new_capacity, size_);
+            std::size_t new_byte_capacity = (new_capacity + 7) / 8;
+            uint8_t* new_arr = new uint8_t[new_byte_capacity]();
+
+            if (arr != nullptr) {
+                std::size_t current_byte_capacity = (capacity_ + 7) / 8;
+                std::copy(arr, arr + std::min(current_byte_capacity, new_byte_capacity), new_arr);
+                delete[] arr;
+            }
+
+            arr = new_arr;
+            capacity_ = new_capacity;
+            size_ = new_size;
+        }
+        else {
+            std::size_t new_byte_capacity = (new_capacity + 7) / 8;
+            uint8_t* new_arr = new uint8_t[new_byte_capacity]();
+
+            if (arr != nullptr) {
+                std::size_t current_byte_capacity = (capacity_ + 7) / 8;
+                std::copy(arr, arr + current_byte_capacity, new_arr);
+                delete[] arr;
+            }
+
+            arr = new_arr;
+            capacity_ = new_capacity;
+        }
+    }
+
+    void resize(std::size_t new_size, bool value = false) {
+        reserve(new_size);
+        for (std::size_t i = size_; i < new_size; ++i) {
+            (*this)[i] = value;
+        }
+        size_ = new_size;
+    }
+
+    void clear() {
+        delete[] arr;
+        arr = nullptr;
+        size_ = 0;
+        capacity_ = 0;
+    }
+
+    Vector() = default;
+
+    ~Vector() {
+        delete[] arr;
+    }
 };
 
-#include <vector>
+void test_push_back_and_size() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.push_back(3);
+    assert(vec.size() == 3);
+    assert(vec[0] == 1);
+    assert(vec[1] == 2);
+    assert(vec[2] == 3);
+}
+
+void test_capacity_and_reserve() {
+    Vector<int> vec;
+    vec.reserve(10);
+    assert(vec.capacity() == 10);
+    vec.push_back(1);
+    vec.push_back(2);
+    assert(vec.capacity() == 10);  // Проверка, что вместимость не изменилась после `push_back`.
+}
+
+void test_resize_without_value() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.resize(5);
+    for (auto& i : vec) {
+        std::cout << i << std::endl;
+    }
+    assert(vec.size() == 5);
+    assert(vec[0] == 1);
+    assert(vec[1] == 2);
+    assert(vec[2] == 0); // Остальные элементы должны быть инициализированы значением по умолчанию (0 для int).
+}
+
+void test_resize_with_value() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.resize(5, 42);
+    assert(vec.size() == 5);
+    assert(vec[2] == 42);
+    assert(vec[3] == 42);
+    assert(vec[4] == 42);
+}
+
+void test_pop_back() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.pop_back();
+    assert(vec.size() == 1);
+    assert(vec[0] == 1);
+}
+
+void test_insert() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(3);
+    auto it = vec.insert(vec.cbegin() + 1, 2);
+    assert(vec.size() == 3);
+    assert(vec[1] == 2);
+    assert(*it == 2);
+}
+
+void test_erase_one() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.push_back(3);
+    auto it = vec.erase(vec.cbegin() + 1);
+    assert(vec.size() == 2);
+    assert(vec[1] == 3);
+    assert(*it == 3);
+}
+
+void test_erase_range() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.push_back(3);
+    vec.push_back(4);
+    auto it = vec.erase(vec.cbegin() + 1, vec.cbegin() + 3);
+    assert(vec.size() == 2);
+    assert(vec[1] == 4);
+    assert(*it == 4);
+}
+
+void test_front_and_back_single_element() {
+    Vector<int> vec;
+    vec.push_back(42);
+    assert(vec.front() == 42);
+    assert(vec.back() == 42);
+}
+
+void test_clear_and_empty() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.clear();
+    assert(vec.empty());
+    assert(vec.size() == 0);
+}
+
+void test_shrink_to_fit() {
+    Vector<int> vec;
+    vec.reserve(100);
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.shrink_to_fit();
+    assert(vec.capacity() == 2);
+}
+
+void test_at_out_of_range() {
+    Vector<int> vec;
+    vec.push_back(1);
+    try {
+        vec.at(2);
+        assert(false); // Ожидаем выброс исключения, если его нет — тест провален.
+    }
+    catch (const std::out_of_range&) {
+        assert(true); // Исключение было выброшено — тест успешен.
+    }
+}
+
+void test_reserve_smaller_capacity() {
+    Vector<int> vec;
+    vec.reserve(10);
+    vec.reserve(5);
+    assert(vec.capacity() == 10);  // Емкость не должна уменьшиться.
+}
+
+void test_iterators() {
+    Vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.push_back(3);
+    int sum = 0;
+    for (auto it = vec.begin(); it != vec.end(); ++it) {
+        sum += *it;
+    }
+    assert(sum == 6);
+}
 
 int main() {
-    Vector<int> vec;
-    std::cout << "Initial vector size: " << vec.size() << std::endl;
-
-    vec.resize(5, 10);
-    std::cout << "Vector size after resize(5, 10): " << vec.size() << std::endl;
-    std::cout << "Vector capacity after resize(5, 10): " << vec.capacity() << std::endl;
-
-    for (size_t i = 0; i < vec.size(); ++i) {
-        std::cout << "Element at index " << i << ": " << vec[i] << std::endl;
-    }
-
-    vec.push_back(20);
-    std::cout << "Vector size after push_back(20): " << vec.size() << std::endl;
-    std::cout << "Element at index 5 (last element): " << vec[5] << std::endl;
-
-    vec.pop_back();
-    std::cout << "Vector size after pop_back(): " << vec.size() << std::endl;
-
-    auto it = vec.begin() + 2;
-    vec.insert(it, 30);
-    std::cout << "Vector size after insert(30): " << vec.size() << std::endl;
-    std::cout << "Element at index 2 (after insert): " << vec[2] << std::endl;
-
-    vec.erase(it);
-    std::cout << "Vector size after erase(): " << vec.size() << std::endl;
-    std::cout << "Element at index 2 (after erase): " << vec[2] << std::endl;
-
-    vec.resize(7, 40);
-    std::cout << "Vector size after resize(7, 40): " << vec.size() << std::endl;
-    std::cout << "Element at index 5 (after resize): " << vec[5] << std::endl;
-
-    vec.resize(3);
-    std::cout << "Vector size after resize(3): " << vec.size() << std::endl;
-
-    vec.clear();
-    std::cout << "Vector size after clear(): " << vec.size() << std::endl;
-
-    try {
-        vec.at(100);
-    }
-    catch (const std::out_of_range& e) {
-        std::cout << "Caught expected exception: " << e.what() << std::endl;
-    }
-
-    Vector<int> vec_init = { 1, 2, 3, 4, 5 };
-    std::cout << "Vector size with initializer_list: " << vec_init.size() << std::endl;
-    for (const auto& i : vec_init) {
-        std::cout << i << " ";
-    }
-    std::cout << std::endl;
-
-    std::cout << "Vector elements in reverse order: ";
-    for (auto it = vec_init.rbegin(); it != vec_init.rend(); ++it) {
-        std::cout << *it << " ";
-    }
-    std::cout << std::endl;
-
-    vec_init.shrink_to_fit();
-    std::cout << "Vector capacity after shrink_to_fit: " << vec_init.capacity() << std::endl;
-
-    try {
-        auto it = vec.rbegin() + 1;
-    }
-    catch (const std::out_of_range& err) {
-        std::cout << err.what() << std::endl;
-    }
-
+    test_push_back_and_size();
+    test_capacity_and_reserve();
+    test_resize_without_value();
+    test_resize_with_value();
+    test_pop_back();
+    test_insert();
+    test_erase_one();
+    test_erase_range();
+    test_front_and_back_single_element();
+    test_clear_and_empty();
+    test_shrink_to_fit();
+    test_at_out_of_range();
+    test_reserve_smaller_capacity();
+    test_iterators();
     return 0;
 }
