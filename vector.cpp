@@ -37,12 +37,12 @@ template <typename T> class Vector {
 
         base_iterator(pointer_type ptr, pointer_type begin, pointer_type end)
             : ptr_(ptr), begin_(begin), end_(end) {}
-        base_iterator(const base_iterator& other): begin_(other.begin_), ptr_(other.begin_), end_(other.end_) {}
+        base_iterator(const base_iterator& other) : begin_(other.begin_), ptr_(other.begin_), end_(other.end_) {}
 
         base_iterator& operator=(const base_iterator& other)const {
             begin_ = other.begin_;
-            ptr_   = other.ptr_;
-            end_   = other.end_;
+            ptr_ = other.ptr_;
+            end_ = other.end_;
         }
 
         reference_type operator*() const {
@@ -188,14 +188,16 @@ public:
         try {
             //new_arr = static_cast<T*>(operator new[](new_capacity * sizeof(T)));
             new_arr = reinterpret_cast<value_type*>(::new char[new_capacity * sizeof(T)]);
-        } catch (const std::bad_alloc& bad) {
+        }
+        catch (const std::bad_alloc& bad) {
             std::cout << bad.what();
             throw;
         }
 
         try {
             std::uninitialized_copy(data_, data_ + size_, new_arr);
-        } catch (...) {
+        }
+        catch (...) {
             delete[] reinterpret_cast<char*>(new_arr);
             throw;
         }
@@ -599,7 +601,7 @@ void test_capacity_and_reserve() {
     assert(vec.capacity() == 10);
     vec.push_back(1);
     vec.push_back(2);
-    assert(vec.capacity() == 10);  // Проверка, что вместимость не изменилась после `push_back`.
+    assert(vec.capacity() == 10);
 }
 
 void test_resize_without_value() {
@@ -613,7 +615,7 @@ void test_resize_without_value() {
     assert(vec.size() == 5);
     assert(vec[0] == 1);
     assert(vec[1] == 2);
-    assert(vec[2] == 0); // Остальные элементы должны быть инициализированы значением по умолчанию (0 для int).
+    assert(vec[2] == 0);
 }
 
 void test_resize_with_value() {
@@ -699,10 +701,10 @@ void test_at_out_of_range() {
     vec.push_back(1);
     try {
         vec.at(2);
-        assert(false); // Ожидаем выброс исключения, если его нет — тест провален.
+        assert(false);
     }
     catch (const std::out_of_range&) {
-        assert(true); // Исключение было выброшено — тест успешен.
+        assert(true);
     }
 }
 
@@ -710,7 +712,7 @@ void test_reserve_smaller_capacity() {
     Vector<int> vec;
     vec.reserve(10);
     vec.reserve(5);
-    assert(vec.capacity() == 10);  // Емкость не должна уменьшиться.
+    assert(vec.capacity() == 10); 
 }
 
 void test_iterators() {
