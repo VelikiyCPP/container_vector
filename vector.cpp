@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <cassert>
 
-template <typename T> class Vector {
+template <typename T, typename Alloc = std::allocator<T>> class Vector {
     using value_type = T;
     using reference = value_type&;
     using const_reference = const value_type&;
@@ -22,6 +22,9 @@ template <typename T> class Vector {
     size_type size_{};
 
     pointer data_ = nullptr;
+
+    using allocator_t = std::allocator_traits<Alloc>;
+    Alloc alloc_;
 
     template <bool is_const>
     class base_iterator {
@@ -43,54 +46,48 @@ template <typename T> class Vector {
             begin_ = other.begin_;
             ptr_ = other.ptr_;
             end_ = other.end_;
+
+            return *this;
         }
 
         reference_type operator*() const {
-            check_range();
             return *ptr_;
         }
         pointer_type operator->() const {
-            check_range();
             return ptr_;
         }
 
         base_iterator& operator++() {
             ++ptr_;
-            check_range();
             return *this;
         }
 
         base_iterator& operator--() {
             --ptr_;
-            check_range();
             return *this;
         }
 
         base_iterator operator++(int) {
-            base_iterator copy<false> = *this;
+            base_iterator<false> copy = *this;
             ++ptr_;
-            check_range();
             return copy;
         }
 
         base_iterator operator--(int) {
             base_iterator<false> copy = *this;
             --ptr_;
-            check_range();
             return copy;
         }
 
         base_iterator operator+(const difference_type value) const {
             base_iterator<false> temp = *this;
             temp.ptr_ += value;
-            temp.check_range();
             return temp;
         }
 
         base_iterator operator-(const difference_type value) const {
             base_iterator<false> temp = *this;
             temp.ptr_ -= value;
-            temp.check_range();
             return temp;
         }
 
@@ -100,13 +97,11 @@ template <typename T> class Vector {
 
         base_iterator& operator+=(const difference_type value) {
             ptr_ += value;
-            check_range();
             return *this;
         }
 
         base_iterator& operator-=(const difference_type n) {
             ptr_ -= n;
-            check_range();
             return *this;
         }
 
@@ -141,12 +136,6 @@ template <typename T> class Vector {
         operator base_iterator<false>() const {
             return { ptr_, begin_, end_ };
         }
-
-        void check_range() const {
-            if (ptr_ < begin_ || ptr_ > end_) {
-                throw std::out_of_range("Iterator out of range");
-            }
-        }
     };
 
     void preparation_for_exit()
@@ -154,6 +143,7 @@ template <typename T> class Vector {
         clear();
         delete[] reinterpret_cast<char*>(data_);
     }
+
 
 public:
     using iterator = base_iterator<false>;
@@ -192,32 +182,98 @@ public:
         }
     }
 
+explicit Vector (const Vector& other) {
+        Alloc new_allocator = allocator_t::select_on_container_copy_construction()
+            ? other.alloc_
+            : alloc_;
+
+        pointer new_arr = allocator_t::allocate(alloc_, other.capacity_);
+
+        std::size_t index = 0;
+        try {
+            for (; index < other.size_; ++index) {
+                allocator_t::construct(alloc_, new_arr + index, other[index]);
+            }
+        } catch (...) {
+            for (std::size_t i = 0; i < index; ++i) {
+                allocator_t::destroy(alloc_, new_arr + i);
+            }
+
+            allocator_t::deallocate(alloc_, new_arr, other.capacity_);
+            throw;
+        }
+
+        for (std::size_t i = 0; i < other.size_; ++i) {
+            allocator_t::destroy(alloc_, data_ + i);
+        }
+
+        allocator_t::deallocate(alloc_, data_, capacity_);
+
+        data_ = new_arr;
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+    }
+
+    Vector& operator=(const Vector& other) {
+        Alloc new_allocator = allocator_t::propagate_on_container_copy_assignment::value
+            ? other.alloc_
+            : alloc_;
+
+        pointer new_arr = allocator_t::allocate(new_allocator, other.capacity_);
+
+        std::size_t index = 0;
+        try {
+            for (; index < other.size_; ++index) {
+                allocator_t::construct(new_allocator, new_arr + index, other[index]);
+            }
+        } catch (...) {
+            for (std::size_t i = 0; i < index; ++i) {
+                allocator_t::destroy(new_allocator, new_arr + i);
+            }
+            allocator_t::deallocate(new_allocator, new_arr, other.capacity_);
+            throw;
+        }
+
+        for (std::size_t i = 0; i < size_; ++i) {
+            allocator_t::destroy(alloc_, data_ + i);
+        }
+
+        allocator_t::deallocate(alloc_, data_, capacity_);
+
+        data_ = new_arr;
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+
+        return *this;
+    }
+
     void reserve(const size_type new_capacity) {
         if (new_capacity <= capacity_) {
             return;
         }
 
-        value_type* new_arr;
+        pointer new_arr = allocator_t::allocate(alloc_, new_capacity);
 
+        std::size_t index = 0;
         try {
-            //new_arr = static_cast<T*>(operator new[](new_capacity * sizeof(T)));
-            new_arr = reinterpret_cast<value_type*>(::new char[new_capacity * sizeof(T)]);
-        }
-        catch (const std::bad_alloc& bad) {
-            std::cout << bad.what();
-            throw;
-        }
-
-        try {
-            std::uninitialized_copy(data_, data_ + size_, new_arr);
+            for (; index < size_; ++index) {
+                allocator_t::construct(alloc_, new_arr + index, data_[index]);
+            }
         }
         catch (...) {
-            delete[] reinterpret_cast<char*>(new_arr);
+            for (std::size_t i = 0; i < index; ++i) {
+                allocator_t::destroy(alloc_, new_arr + i);
+            }
+
+            allocator_t::deallocate(alloc_, new_arr, capacity_);
             throw;
         }
 
-        std::destroy(data_, data_ + size_);
-        delete[] reinterpret_cast<char*>(data_);
+        for (std::size_t i = 0; i < size_; ++i) {
+            allocator_t::destroy(alloc_, data_ + i);
+        }
+
+        allocator_t::deallocate(alloc_, data_, new_capacity);
 
         data_ = new_arr;
         capacity_ = new_capacity;
